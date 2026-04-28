@@ -23,9 +23,7 @@ function buildSignedUrl(command: string, params: CsParams): string {
   for (const [k, v] of Object.entries(params)) all[k] = String(v);
   all.command = command;
 
-  const sorted = Object.entries(all).sort(([a], [b]) =>
-    a.localeCompare(b)
-  );
+  const sorted = Object.entries(all).sort(([a], [b]) => a.localeCompare(b));
   const qs = sorted
     .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
     .join("&");
@@ -75,12 +73,10 @@ export async function csWaitJob(
   jobid: string,
   timeoutMs = 600_000,
   pollMs = 2_000
-): Promise<AsyncJobResult["queryasyncjobresultresponse"]> {
+): Promise<NonNullable<AsyncJobResult["queryasyncjobresultresponse"]>> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const r = await csCall<AsyncJobResult>("queryAsyncJobResult", {
-      jobid
-    });
+    const r = await csCall<AsyncJobResult>("queryAsyncJobResult", { jobid });
     const j = r.queryasyncjobresultresponse;
     if (j && (j.jobstatus === 1 || j.jobstatus === 2)) return j;
     await new Promise((res) => setTimeout(res, pollMs));
@@ -96,13 +92,70 @@ export type Zone = {
 };
 
 type ListZonesResponse = {
-  listzonesresponse?: {
-    zone?: Zone[];
-    count?: number;
-  };
+  listzonesresponse?: { zone?: Zone[]; count?: number };
 };
 
 export async function listZones(): Promise<Zone[]> {
   const r = await csCall<ListZonesResponse>("listZones");
   return r.listzonesresponse?.zone ?? [];
+}
+
+export type CsAccount = {
+  id: string;
+  name: string;
+  accounttype: number;
+  state: string;
+  domain: string;
+  domainid: string;
+};
+
+type CreateAccountResponse = {
+  createaccountresponse?: { account?: CsAccount };
+};
+
+export async function createCsAccount(args: {
+  account: string;
+  domainid: string;
+  username: string;
+  password: string;
+  email: string;
+  firstname: string;
+  lastname: string;
+}): Promise<CsAccount> {
+  const r = await csCall<CreateAccountResponse>("createAccount", {
+    accounttype: "0",
+    domainid: args.domainid,
+    username: args.username,
+    password: args.password,
+    firstname: args.firstname,
+    lastname: args.lastname,
+    email: args.email,
+    account: args.account
+  });
+  const acct = r.createaccountresponse?.account;
+  if (!acct) throw new Error("createAccount returned no account");
+  return acct;
+}
+
+export async function setResourceLimit(args: {
+  account: string;
+  domainid: string;
+  resourcetype: string;
+  max: string;
+}): Promise<void> {
+  await csCall("updateResourceLimit", {
+    account: args.account,
+    domainid: args.domainid,
+    resourcetype: args.resourcetype,
+    max: args.max
+  });
+}
+
+export async function deleteCsAccount(id: string): Promise<void> {
+  const r = await csCall<{ deleteaccountresponse?: { jobid?: string } }>(
+    "deleteAccount",
+    { id }
+  );
+  const jobid = r.deleteaccountresponse?.jobid;
+  if (jobid) await csWaitJob(jobid);
 }
