@@ -1,0 +1,11 @@
+// Prisma schema. User/SshKey/Session models will be added in stage 1+.
+// See webconsole-mvp-design.md §7 for the planned schema.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}

@@ -1,0 +1,40 @@
+services:
+  app:
+    build: .
+    container_name: webconsole-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./:/app
+      - app_node_modules:/app/node_modules
+      - app_next_cache:/app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: webconsole-db
+    env_file:
+      - .env.local
+    environment:
+      POSTGRES_USER: webconsole
+      POSTGRES_DB: webconsole
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U webconsole -d webconsole"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  app_node_modules:
+  app_next_cache:
