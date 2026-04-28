@@ -4,13 +4,18 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireUser, HttpError } from "@/lib/cs-user";
 import { deployVmSchema } from "@/lib/zod-schemas";
-import { csWaitJob, deployVm, listAccountVms } from "@/lib/cloudstack";
+import {
+  csWaitJob,
+  destroyVm,
+  deployVm,
+  listAccountVms
+} from "@/lib/cloudstack";
 import { ensureUserDefaultNetwork } from "@/lib/cs-customers";
 
 export const dynamic = "force-dynamic";
 
 type VmSummary = {
-  id: string; // db id
+  id: string;
   csVmId: string;
   name: string;
   state: string;
@@ -66,6 +71,17 @@ export async function GET() {
   }
 }
 
+async function safeDestroyCsVm(csVmId: string): Promise<void> {
+  try {
+    const { jobid } = await destroyVm(csVmId, true);
+    // Don't block too long; just give CloudStack a chance to register the
+    // teardown. If it stalls we still return early — caller already failed.
+    await csWaitJob(jobid, 60_000, 3_000).catch(() => undefined);
+  } catch (e) {
+    console.warn(`[safeDestroyCsVm] cleanup of ${csVmId} failed:`, e);
+  }
+}
+
 export async function POST(req: Request) {
   let user;
   try {
@@ -110,6 +126,8 @@ export async function POST(req: Request) {
     throw e;
   }
 
+  let createdCsVmId: string | null = null;
+
   try {
     const network = await ensureUserDefaultNetwork({
       userId: user.id,
@@ -126,10 +144,10 @@ export async function POST(req: Request) {
       name,
       keypair: sshKeyName
     });
+    createdCsVmId = csVmId;
 
-    // We update the row with the real csVmId immediately (so listing shows it
-    // as "Starting"). The job continues in the background; we still wait so
-    // that the API response carries the final state.
+    // Update placeholder with real csVmId so a later list shows it as
+    // Starting even if the wait below times out.
     await prisma.vm.update({
       where: { id: placeholder.id },
       data: { csVmId }
@@ -137,10 +155,11 @@ export async function POST(req: Request) {
 
     const job = await csWaitJob(jobid, 600_000, 3_000);
     if (job.jobstatus === 2) {
-      // Failed — destroyVirtualMachine isn't needed: CloudStack rolls back.
-      await prisma.vm.delete({ where: { id: placeholder.id } });
       const result = job.jobresult as { errortext?: string } | undefined;
       const msg = result?.errortext ?? "deploy failed";
+      // CloudStack may have created a half-baked VM record even on async fail.
+      await safeDestroyCsVm(csVmId);
+      await prisma.vm.delete({ where: { id: placeholder.id } });
       const lower = msg.toLowerCase();
       if (lower.includes("resource limit") || lower.includes("exceed")) {
         return NextResponse.json(
@@ -155,11 +174,17 @@ export async function POST(req: Request) {
     }
     return NextResponse.json({ ok: true, vm: { id: placeholder.id, csVmId } });
   } catch (e) {
+    if (createdCsVmId) {
+      await safeDestroyCsVm(createdCsVmId);
+    }
     await prisma.vm
       .delete({ where: { id: placeholder.id } })
       .catch(() => undefined);
     const msg = e instanceof Error ? e.message : String(e);
-    if (msg.toLowerCase().includes("resource limit") || msg.toLowerCase().includes("exceed")) {
+    if (
+      msg.toLowerCase().includes("resource limit") ||
+      msg.toLowerCase().includes("exceed")
+    ) {
       return NextResponse.json({ error: "quota_exceeded", message: msg }, { status: 409 });
     }
     console.error("[POST /api/vms] failed", e);

@@ -48,34 +48,53 @@ const DEFAULT_USER_NETWORK_NAME = "default";
 const DEFAULT_USER_NETWORK_GATEWAY = "10.10.30.1";
 const DEFAULT_USER_NETWORK_NETMASK = "255.255.255.0";
 
+const HEALTHY_NETWORK_STATES = new Set(["Allocated", "Setup", "Implemented"]);
+
 /**
- * Ensure the user has a default Isolated VXLAN network. Idempotent:
- * - reuses the DB row if present
- * - otherwise scans CloudStack for a matching net (recovery), or creates one
- *   and writes the DB row.
+ * Ensure the user has a default Isolated VXLAN network.
+ *
+ * Idempotent and self-healing:
+ *  - If a DB row exists, verify the CloudStack network is still in a healthy
+ *    state (Allocated/Setup/Implemented). If it's stuck in Implementing/
+ *    Destroy/missing, drop the stale row and create a fresh network.
+ *  - If no DB row, look in the account; otherwise call createNetwork.
  */
 export async function ensureUserDefaultNetwork(args: {
   userId: string;
   account: string;
   domainid: string;
 }): Promise<{ csNetworkId: string; name: string; cidr: string; gateway: string }> {
-  const existing = await prisma.userNetwork.findUnique({
-    where: { userId: args.userId }
-  });
-  if (existing) {
-    return {
-      csNetworkId: existing.csNetworkId,
-      name: existing.name,
-      cidr: existing.cidr,
-      gateway: existing.gateway
-    };
-  }
-
   const accountNets = await listAccountNetworks({
     account: args.account,
     domainid: args.domainid
   });
-  const matched = accountNets.find((n) => n.name === DEFAULT_USER_NETWORK_NAME);
+
+  const existing = await prisma.userNetwork.findUnique({
+    where: { userId: args.userId }
+  });
+
+  if (existing) {
+    const live = accountNets.find((n) => n.id === existing.csNetworkId);
+    if (live && HEALTHY_NETWORK_STATES.has(live.state)) {
+      return {
+        csNetworkId: existing.csNetworkId,
+        name: existing.name,
+        cidr: existing.cidr,
+        gateway: existing.gateway
+      };
+    }
+    // stale — DB points to a network that's gone or stuck
+    console.warn(
+      `[ensureUserDefaultNetwork] dropping stale UserNetwork (csNetworkId=${existing.csNetworkId}, liveState=${live?.state ?? "missing"})`
+    );
+    await prisma.userNetwork.delete({ where: { id: existing.id } });
+  }
+
+  // Re-fetch in case the DB row pointed to nothing useful — try to reuse a
+  // healthy account-level network with the canonical name.
+  const matched = accountNets.find(
+    (n) => n.name === DEFAULT_USER_NETWORK_NAME && HEALTHY_NETWORK_STATES.has(n.state)
+  );
 
   let csNet;
   if (matched) {
