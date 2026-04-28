@@ -47,3 +47,41 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: self-hosted
+    steps:
+      - name: Pull latest source on host
+        working-directory: /home/ubuntu/projects/Leidden-webconsole-mvp
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Switch to prod compose
+        working-directory: /home/ubuntu/projects/Leidden-webconsole-mvp
+        run: |
+          # Stop whichever compose is currently up (dev or prod). Named
+          # volumes (postgres_data, etc.) survive across `down`, so user
+          # accounts and migrations carry over between runs.
+          docker compose -f docker-compose.yml down 2>/dev/null || true
+          docker compose -f docker-compose.prod.yml pull
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+      - name: Wait for /api/health
+        run: |
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/api/health || true)
+            if [ "$code" = "200" ]; then
+              echo "ready (try $i)"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "TIMEOUT" >&2
+          docker compose -f /home/ubuntu/projects/Leidden-webconsole-mvp/docker-compose.prod.yml \
+            logs --tail=80 app || true
+          exit 1
+
+      - name: Prune old images (24h+)
+        run: docker image prune -f --filter "until=24h" || true
