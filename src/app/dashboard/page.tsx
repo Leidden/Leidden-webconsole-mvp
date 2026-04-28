@@ -25,7 +25,7 @@ export default async function DashboardPage() {
       csDomainId: true,
       csAccountId: true,
       createdAt: true,
-      _count: { select: { sshKeys: true } }
+      _count: { select: { sshKeys: true, vms: true } }
     }
   });
 
@@ -47,6 +47,15 @@ export default async function DashboardPage() {
 
       <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
         <Link
+          href="/dashboard/vms"
+          className="rounded border bg-white p-4 shadow-sm hover:bg-gray-50"
+        >
+          <div className="font-semibold">Virtual machines</div>
+          <div className="text-xs text-gray-600 mt-1">
+            {user?._count.vms ?? 0} VM(s) · deploy/start/stop/destroy
+          </div>
+        </Link>
+        <Link
           href="/dashboard/keys"
           className="rounded border bg-white p-4 shadow-sm hover:bg-gray-50"
         >
@@ -55,10 +64,6 @@ export default async function DashboardPage() {
             {user?._count.sshKeys ?? 0} key(s) · upload or generate
           </div>
         </Link>
-        <div className="rounded border bg-gray-50 p-4 text-gray-400">
-          <div className="font-semibold">Virtual machines</div>
-          <div className="text-xs mt-1">stage 3 — coming soon</div>
-        </div>
       </nav>
 
       <section className="rounded-lg border bg-white p-6 shadow-sm">

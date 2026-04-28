@@ -22,17 +22,19 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   sshKeys       SshKey[]
+  vms           Vm[]
+  network       UserNetwork?
 }
 
 model SshKey {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   fingerprint String
   source      KeySource
   csName      String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@unique([userId, name])
 }
@@ -40,4 +42,29 @@ model SshKey {
 enum KeySource {
   uploaded
   generated
+}
+
+model UserNetwork {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  csNetworkId String   @unique
+  name        String
+  cidr        String
+  gateway     String
+  createdAt   DateTime @default(now())
+}
+
+model Vm {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  csVmId            String   @unique
+  name              String
+  templateId        String
+  serviceOfferingId String
+  sshKeyName        String?
+  createdAt         DateTime @default(now())
+
+  @@unique([userId, name])
 }
