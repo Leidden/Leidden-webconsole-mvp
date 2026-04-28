@@ -1,6 +1,8 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
-import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,8 @@ export default async function DashboardPage() {
       csAccountName: true,
       csDomainId: true,
       csAccountId: true,
-      createdAt: true
+      createdAt: true,
+      _count: { select: { sshKeys: true } }
     }
   });
 
@@ -42,6 +45,22 @@ export default async function DashboardPage() {
         </form>
       </header>
 
+      <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+        <Link
+          href="/dashboard/keys"
+          className="rounded border bg-white p-4 shadow-sm hover:bg-gray-50"
+        >
+          <div className="font-semibold">SSH keys</div>
+          <div className="text-xs text-gray-600 mt-1">
+            {user?._count.sshKeys ?? 0} key(s) · upload or generate
+          </div>
+        </Link>
+        <div className="rounded border bg-gray-50 p-4 text-gray-400">
+          <div className="font-semibold">Virtual machines</div>
+          <div className="text-xs mt-1">stage 3 — coming soon</div>
+        </div>
+      </nav>
+
       <section className="rounded-lg border bg-white p-6 shadow-sm">
         <h2 className="font-semibold text-lg mb-4">Your CloudStack mapping</h2>
         <dl className="text-sm grid grid-cols-2 gap-2">
@@ -54,10 +73,6 @@ export default async function DashboardPage() {
           <dt className="text-gray-500">Created</dt>
           <dd>{user?.createdAt?.toISOString()}</dd>
         </dl>
-        <p className="text-xs text-gray-500 mt-6">
-          Next stages: SSH key management, VM lifecycle, console access. See
-          webconsole-mvp-design.md.
-        </p>
       </section>
     </main>
   );

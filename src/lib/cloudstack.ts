@@ -159,3 +159,93 @@ export async function deleteCsAccount(id: string): Promise<void> {
   const jobid = r.deleteaccountresponse?.jobid;
   if (jobid) await csWaitJob(jobid);
 }
+
+// ──────────────────────────────────────────────────────────
+// SSH key pair (per Account)
+// ──────────────────────────────────────────────────────────
+
+export type CsSshKeyPair = {
+  id?: string;
+  name: string;
+  fingerprint: string;
+  account?: string;
+  domain?: string;
+  domainid?: string;
+};
+
+export type CsSshKeyPairWithPrivate = CsSshKeyPair & {
+  privatekey: string;
+};
+
+type RegisterSshKeyPairResponse = {
+  registersshkeypairresponse?: { keypair?: CsSshKeyPair };
+};
+type CreateSshKeyPairResponse = {
+  createsshkeypairresponse?: { keypair?: CsSshKeyPairWithPrivate };
+};
+type ListSshKeyPairsResponse = {
+  listsshkeypairsresponse?: { sshkeypair?: CsSshKeyPair[]; count?: number };
+};
+type DeleteSshKeyPairResponse = {
+  deletesshkeypairresponse?: { success?: boolean | string };
+};
+
+export async function registerCsSshKey(args: {
+  account: string;
+  domainid: string;
+  name: string;
+  publickey: string;
+}): Promise<CsSshKeyPair> {
+  const r = await csCall<RegisterSshKeyPairResponse>("registerSSHKeyPair", {
+    account: args.account,
+    domainid: args.domainid,
+    name: args.name,
+    publickey: args.publickey
+  });
+  const kp = r.registersshkeypairresponse?.keypair;
+  if (!kp) throw new Error("registerSSHKeyPair returned no keypair");
+  return kp;
+}
+
+export async function createCsSshKey(args: {
+  account: string;
+  domainid: string;
+  name: string;
+}): Promise<CsSshKeyPairWithPrivate> {
+  const r = await csCall<CreateSshKeyPairResponse>("createSSHKeyPair", {
+    account: args.account,
+    domainid: args.domainid,
+    name: args.name
+  });
+  const kp = r.createsshkeypairresponse?.keypair;
+  if (!kp || !kp.privatekey) {
+    throw new Error("createSSHKeyPair returned no private key");
+  }
+  return kp;
+}
+
+export async function deleteCsSshKey(args: {
+  account: string;
+  domainid: string;
+  name: string;
+}): Promise<boolean> {
+  const r = await csCall<DeleteSshKeyPairResponse>("deleteSSHKeyPair", {
+    account: args.account,
+    domainid: args.domainid,
+    name: args.name
+  });
+  const ok = r.deletesshkeypairresponse?.success;
+  return ok === true || ok === "true";
+}
+
+export async function listCsSshKeys(args: {
+  account: string;
+  domainid: string;
+}): Promise<CsSshKeyPair[]> {
+  const r = await csCall<ListSshKeyPairsResponse>("listSSHKeyPairs", {
+    account: args.account,
+    domainid: args.domainid,
+    listall: "true"
+  });
+  return r.listsshkeypairsresponse?.sshkeypair ?? [];
+}

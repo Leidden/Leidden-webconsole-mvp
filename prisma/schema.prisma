@@ -1,7 +1,5 @@
 // User holds the self-managed account record. CloudStack Account is created
 // at signup time and its handle/id is stored here for future API calls.
-//
-// Stage 1 only adds the User model. SshKey/Vm models follow in later stages.
 
 generator client {
   provider      = "prisma-client-js"
@@ -23,4 +21,23 @@ model User {
   csAccountId   String   @unique
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  sshKeys       SshKey[]
+}
+
+model SshKey {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  fingerprint String
+  source      KeySource
+  csName      String
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, name])
+}
+
+enum KeySource {
+  uploaded
+  generated
 }
