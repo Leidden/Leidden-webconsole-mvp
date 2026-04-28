@@ -1,0 +1,11 @@
+node_modules
+.next
+.env.local
+.env*.local
+.git
+.github
+*.log
+postgres-data
+.DS_Store
+README.md
+webconsole-mvp-design.md

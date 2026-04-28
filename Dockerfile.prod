@@ -1,0 +1,28 @@
+# Production image. Builds Next.js for production and applies Prisma
+# migrations on container start. Slightly larger than a standalone build
+# but keeps the deploy story simple — one image, one entrypoint.
+
+FROM node:20-alpine
+
+# Prisma needs openssl + libc6-compat on Alpine.
+RUN apk add --no-cache openssl libc6-compat tini
+
+WORKDIR /app
+
+# Install dependencies first (layer caching).
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
+RUN npm ci
+
+# Copy app source and build Next.js for production.
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+
+# tini reaps zombies cleanly. Apply pending migrations, then start.
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
