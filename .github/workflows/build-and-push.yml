@@ -52,6 +52,15 @@ jobs:
     needs: build
     runs-on: self-hosted
     steps:
+      # Authenticate the host docker daemon so `compose pull` works
+      # regardless of the package's visibility (public or private).
+      - name: Log in to GHCR (host docker daemon)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Pull latest source on host
         working-directory: /home/ubuntu/projects/Leidden-webconsole-mvp
         run: |
