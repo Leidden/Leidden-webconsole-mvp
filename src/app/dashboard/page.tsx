@@ -49,7 +49,7 @@ export default async function DashboardPage() {
 
       <UsageCard account={user.csAccountName} domainid={user.csDomainId} />
 
-      <nav className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <nav className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link
           href="/dashboard/vms"
           className="rounded border bg-white p-4 shadow-sm hover:bg-gray-50"
@@ -66,6 +66,15 @@ export default async function DashboardPage() {
           <div className="font-semibold">SSH keys</div>
           <div className="text-xs text-gray-600 mt-1">
             {user._count.sshKeys} key(s) · upload or generate
+          </div>
+        </Link>
+        <Link
+          href="/dashboard/ips"
+          className="rounded border bg-white p-4 shadow-sm hover:bg-gray-50"
+        >
+          <div className="font-semibold">Public IPs</div>
+          <div className="text-xs text-gray-600 mt-1">
+            acquire/release · Source NAT auto-managed
           </div>
         </Link>
       </nav>
